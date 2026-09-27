@@ -1,0 +1,234 @@
+// Climbly data model. Source of truth for the database: change it, then `pnpm db:migrate:dev --name <change>`.
+//
+// Supabase specifics:
+// - `auth.users` belongs to Supabase Auth and is not modelled. profiles.id references it with ON DELETE
+//   CASCADE through a foreign key created in the init migration's SQL; Prisma leaves foreign keys into
+//   schemas it doesn't manage alone.
+// - Row Level Security, CHECK constraints and privilege revokes live in hand-written SQL inside the
+//   migrations (Prisma doesn't model them and leaves them alone).
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../server/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Only `public`. Supabase's `auth` schema is deliberately invisible to Prisma: listing it would make Migrate
+  // treat Supabase's own tables (sessions, identities, ...) as drift to drop, and refuse to deploy into a
+  // "non-empty" database. The link to auth.users is a hand-written foreign key (see the init migration).
+  schemas  = ["public"]
+}
+
+enum UserRole {
+  user
+  moderator
+  admin
+
+  @@map("user_role")
+  @@schema("public")
+}
+
+enum ReportTarget {
+  post
+  comment
+
+  @@map("report_target")
+  @@schema("public")
+}
+
+enum ReportReason {
+  spam
+  harassment
+  sexual_content
+  self_harm
+  other
+
+  @@map("report_reason")
+  @@schema("public")
+}
+
+enum ReportStatus {
+  open
+  dismissed
+  actioned
+
+  @@map("report_status")
+  @@schema("public")
+}
+
+enum CheckInOutcome {
+  victory
+  setback
+
+  @@map("check_in_outcome")
+  @@schema("public")
+}
+
+/// One row per Supabase user, created lazily on the first authenticated request.
+model Profile {
+  id                String    @id @db.Uuid
+  /// Shown on forum posts; null means "anonymous". 2–24 characters (CHECK constraint in SQL).
+  username       String?   @map("username")
+  role              UserRole  @default(user)
+  bannedUntil       DateTime? @map("banned_until") @db.Timestamptz(3)
+  banReason         String?   @map("ban_reason")
+  /// When the current journey started, from the last journey backup.
+  journeyStartedAt  DateTime? @map("journey_started_at") @db.Timestamptz(3)
+  /// Client clock of the last accepted journey snapshot; older snapshots are rejected.
+  journeySnapshotAt DateTime? @map("journey_snapshot_at") @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  posts            Post[]
+  comments         Comment[]
+  reports          Report[]          @relation("reporter")
+  resolvedReports  Report[]          @relation("resolver")
+  blocking         UserBlock[]       @relation("blocker")
+  blockedBy        UserBlock[]       @relation("blocked")
+  checkIns         CheckIn[]
+  relapses         Relapse[]
+  habitCompletions HabitCompletion[]
+
+  @@map("profiles")
+  @@schema("public")
+}
+
+model Post {
+  /// Clients send their own UUID so a retried create is idempotent; otherwise a time-ordered UUIDv7.
+  id               String    @id @default(uuid(7)) @db.Uuid
+  authorId         String    @map("author_id") @db.Uuid
+  /// Snapshot of the author's display name at posting time; keeps the feed free of joins.
+  authorName       String    @map("author_name")
+  authorStreakDays Int       @default(0) @map("author_streak_days")
+  /// 10–1000 characters (CHECK constraint in SQL).
+  body             String
+  /// Comments that are neither removed nor hidden; maintained on every state transition.
+  commentCount     Int       @default(0) @map("comment_count")
+  reportCount      Int       @default(0) @map("report_count")
+  /// Hidden by reports or a moderator; still visible to its author.
+  hiddenAt         DateTime? @map("hidden_at") @db.Timestamptz(3)
+  /// Deleted by its author or removed by a moderator.
+  removedAt        DateTime? @map("removed_at") @db.Timestamptz(3)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  author   Profile   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments Comment[]
+
+  /// Keyset pagination for the feed: ORDER BY created_at DESC, id DESC.
+  @@index([createdAt(sort: Desc), id(sort: Desc)], map: "posts_feed_idx")
+  @@index([authorId], map: "posts_author_idx")
+  @@map("posts")
+  @@schema("public")
+}
+
+model Comment {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  postId      String    @map("post_id") @db.Uuid
+  authorId    String    @map("author_id") @db.Uuid
+  authorName  String    @map("author_name")
+  /// 1–500 characters (CHECK constraint in SQL).
+  body        String
+  reportCount Int       @default(0) @map("report_count")
+  hiddenAt    DateTime? @map("hidden_at") @db.Timestamptz(3)
+  removedAt   DateTime? @map("removed_at") @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  post   Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author Profile @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt, id], map: "comments_thread_idx")
+  @@index([authorId], map: "comments_author_idx")
+  @@map("comments")
+  @@schema("public")
+}
+
+model Report {
+  id         String       @id @default(uuid(7)) @db.Uuid
+  reporterId String       @map("reporter_id") @db.Uuid
+  targetType ReportTarget @map("target_type")
+  targetId   String       @map("target_id") @db.Uuid
+  reason     ReportReason
+  details    String?
+  status     ReportStatus @default(open)
+  resolvedBy String?      @map("resolved_by") @db.Uuid
+  resolvedAt DateTime?    @map("resolved_at") @db.Timestamptz(3)
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  reporter Profile  @relation("reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  resolver Profile? @relation("resolver", fields: [resolvedBy], references: [id], onDelete: SetNull)
+
+  /// One report per person per target: repeat reports can't push content over the auto-hide threshold.
+  @@unique([reporterId, targetType, targetId], map: "reports_once_per_reporter")
+  @@index([status, createdAt], map: "reports_queue_idx")
+  @@index([targetType, targetId], map: "reports_target_idx")
+  @@map("reports")
+  @@schema("public")
+}
+
+/// "Hide posts from this person": the blocker never sees the blocked user's posts or comments.
+model UserBlock {
+  blockerId String   @map("blocker_id") @db.Uuid
+  blockedId String   @map("blocked_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  blocker Profile @relation("blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked Profile @relation("blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@id([blockerId, blockedId])
+  @@index([blockedId], map: "user_blocks_blocked_idx")
+  @@map("user_blocks")
+  @@schema("public")
+}
+
+// Journey backup (opt-in in the app). The client is the source of truth and uploads whole snapshots.
+
+model CheckIn {
+  userId             String         @map("user_id") @db.Uuid
+  /// Local calendar day.
+  day                DateTime       @db.Date
+  outcome            CheckInOutcome
+  emotions           String[]       @default([])
+  /// 0–10 (CHECK constraint in SQL).
+  urge               Int?           @db.SmallInt
+  reflectionToday    String?        @map("reflection_today")
+  reflectionTomorrow String?        @map("reflection_tomorrow")
+  journal            String?
+  recommitQuote      String?        @map("recommit_quote")
+  /// When the person saved it, on their device.
+  recordedAt         DateTime       @map("recorded_at") @db.Timestamptz(3)
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, day])
+  @@map("check_ins")
+  @@schema("public")
+}
+
+model Relapse {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  occurredAt DateTime @map("occurred_at") @db.Timestamptz(3)
+  note       String?
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, occurredAt], map: "relapses_user_idx")
+  @@map("relapses")
+  @@schema("public")
+}
+
+model HabitCompletion {
+  userId  String   @map("user_id") @db.Uuid
+  habitId String   @map("habit_id")
+  day     DateTime @db.Date
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, habitId, day])
+  @@map("habit_completions")
+  @@schema("public")
+}

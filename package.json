@@ -1,0 +1,50 @@
+{
+  "name": "climbly-api",
+  "type": "module",
+  "private": true,
+  "packageManager": "pnpm@12.3.4",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "prisma generate && nuxt build",
+    "start": "node .output/server/index.mjs",
+    "preview": "nuxt preview",
+    "postinstall": "prisma generate && nuxt prepare",
+    "typecheck": "nuxt typecheck && tsc --noEmit --strict --skipLibCheck --module esnext --moduleResolution bundler --target es2022 --types node prisma/seed.ts prisma.config.ts",
+    "test": "pnpm build && vitest run",
+    "test:only": "vitest run",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:migrate:dev": "prisma migrate dev",
+    "db:status": "prisma migrate status",
+    "db:seed": "prisma db seed",
+    "db:reset": "prisma migrate reset",
+    "db:studio": "prisma studio",
+    "db:local": "node tests/pglite-server.mjs 54329"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
+    "ioredis": "^6.0.0",
+    "jose": "^6.2.12",
+    "nuxt": "^4.5.2",
+    "ofetch": "1.5.1",
+    "rate-limiter-flexible": "^11.2.1",
+    "vue": "^3.5.43",
+    "vue-router": "^5.3.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@electric-sql/pglite-socket": "^0.2.11",
+    "@types/node": "^24.19.0",
+    "dotenv": "^17.0.0",
+    "prisma": "7.10.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.0",
+    "vitest": "^4.1.11",
+    "vue-tsc": "^3.0.0"
+  }
+}

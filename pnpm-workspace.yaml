@@ -1,0 +1,9 @@
+allowBuilds:
+  esbuild: true
+  prisma: true
+  "@prisma/engines": true
+
+# Patched versions for advisories in build-time tooling (Prisma CLI deps; nothing here ships in .output).
+overrides:
+  mysql2: ">=3.23.1"
+  deepmerge-ts: ">=8.0.0"
