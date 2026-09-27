@@ -40,6 +40,8 @@ export const RateLimits = {
   // Authentication. Login and password reset are also limited per email address (hashed), so one account
   // can't be guessed at from many IPs.
   authRegisterIp: { name: 'auth-register-ip', points: 10, duration: 60 * 60 },
+  // A fresh install signs up once; reinstalls and cleared app data do it again.
+  authAnonymousIp: { name: 'auth-anonymous-ip', points: 10, duration: 60 * 60 },
   authLoginIp: { name: 'auth-login-ip', points: 20, duration: 15 * 60 },
   authLoginEmail: { name: 'auth-login-email', points: 10, duration: 15 * 60, blockDuration: 15 * 60 },
   authRefreshIp: { name: 'auth-refresh-ip', points: 120, duration: 15 * 60 },

@@ -64,6 +64,7 @@ function mapGoTrueError(status: number, body: GoTrueErrorBody): never {
     case 'email_provider_disabled':
       throw problem(403, 'forbidden', 'Signing up with email is disabled.')
     case 'provider_disabled':
+    case 'anonymous_provider_disabled':
       throw problem(403, 'forbidden', 'This sign-in method is disabled.')
     case 'email_address_invalid':
     case 'email_address_not_authorized':
@@ -105,6 +106,14 @@ async function gotrue<T>(path: string, init: GoTrueCall = {}): Promise<T> {
     init.onError?.(e.statusCode, e.data ?? {})
     return mapGoTrueError(e.statusCode, e.data ?? {})
   }
+}
+
+/**
+ * A new anonymous account (Authentication → Allow anonymous sign-ins). Supabase limits these per IP, and every
+ * one of them reaches it from this server, so its limit applies to all devices together: see the README.
+ */
+export function supabaseSignInAnonymously() {
+  return gotrue<GoTrueSession>('/signup', { body: {} })
 }
 
 /** Email/password sign-up. Without a session in the answer, the project wants the email confirmed first. */
@@ -172,7 +181,8 @@ export function presentSession(s: GoTrueSession) {
 export function presentAuthUser(u: GoTrueUser) {
   return {
     id: u.id,
-    email: u.email ?? null,
+    // Supabase gives anonymous users an empty email.
+    email: u.email || null,
     isAnonymous: u.is_anonymous === true,
     emailConfirmed: Boolean(u.email_confirmed_at),
   }

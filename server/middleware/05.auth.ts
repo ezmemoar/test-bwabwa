@@ -2,10 +2,10 @@
 // per-user rate limit), carries no token (handlers that need one call requireUser and get a 401), or carries
 // a bad one and is rejected outright.
 //
-// Exception: the sign-in routes (register, login, refresh, password reset). A token there is optional
+// Exception: the sign-in routes (anonymous, register, login, refresh, password reset). A token there is optional
 // context (the device's anonymous account, to merge), and an expired one must not stop anyone from signing
 // in, so an unusable token just means "no current user".
-const LENIENT = /^\/api\/v1\/auth\/(register|login|google|refresh|password\/)/
+const LENIENT = /^\/api\/v1\/auth\/(anonymous|register|login|google|refresh|password\/)/
 
 export default defineEventHandler(async (event) => {
   if (!event.path.startsWith('/api/v1/')) return

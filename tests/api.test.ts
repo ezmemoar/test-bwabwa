@@ -411,6 +411,31 @@ describe('auth: register and login', () => {
     expect(login.body.code).toBe('email_not_confirmed')
   })
 
+  it('creates anonymous accounts through the API and refreshes them', async () => {
+    // A stale bearer from an earlier install doesn't get in the way either.
+    const res = await api('POST', '/api/v1/auth/anonymous', { ip: ip(), token: 'a.b.c' })
+    expect(res.status).toBe(201)
+    expect(res.body.user).toMatchObject({ isAnonymous: true, email: null, emailConfirmed: false })
+    const { accessToken, refreshToken, expiresAt } = res.body.session
+    expect(expiresAt).toBeGreaterThan(Date.now() / 1000)
+
+    const me = await api('GET', '/api/v1/me', { ip: ip(), token: accessToken })
+    expect(me.status).toBe(200)
+    expect(me.body).toMatchObject({ id: res.body.user.id, isAnonymous: true, username: null })
+
+    const refreshed = await api('POST', '/api/v1/auth/refresh', { ip: ip(), body: { refreshToken } })
+    expect(refreshed.status).toBe(200)
+    expect(refreshed.body.user).toMatchObject({ id: res.body.user.id, isAnonymous: true })
+  })
+
+  it('limits anonymous sign-ups per client address', async () => {
+    const address = ip()
+    const statuses: number[] = []
+    for (let i = 0; i < 11; i++) statuses.push((await api('POST', '/api/v1/auth/anonymous', { ip: address })).status)
+    expect(statuses.slice(0, 10).every((s) => s === 201)).toBe(true)
+    expect(statuses[10]).toBe(429)
+  })
+
   it('logs in, refreshes (single-use tokens) and logs out', async () => {
     const address = email('login')
     await api('POST', '/api/v1/auth/register', { ip: ip(), body: { email: address, password: 'long enough 9' } })

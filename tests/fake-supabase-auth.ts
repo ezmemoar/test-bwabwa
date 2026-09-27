@@ -3,7 +3,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { PGlite } from '@electric-sql/pglite'
 import { decodeJwt, SignJWT, type JWK } from 'jose'
 
-// A stand-in for Supabase Auth (GoTrue) with the behaviour the API relies on: email/password sign-up (with an
+// A stand-in for Supabase Auth (GoTrue) with the behaviour the API relies on: anonymous sign-up (a signup
+// without email or password), email/password sign-up (with an
 // opt-in "confirm your email" path: any address containing "+confirm"), password and refresh-token grants
 // (refresh tokens are single-use, like Supabase's), logout by scope, password recovery, the JWKS endpoint,
 // and GoTrue's error shapes. Users are written to the test database's auth.users, as Supabase would.
@@ -19,6 +20,7 @@ interface FakeUser {
   password: string
   confirmed: boolean
   metadata: Record<string, unknown>
+  anonymous?: boolean
 }
 
 export function createFakeSupabaseAuth(opts: { db: PGlite; privateKey: CryptoKey; kid: string; publicJwk: JWK; issuer: () => string }) {
@@ -35,7 +37,7 @@ export function createFakeSupabaseAuth(opts: { db: PGlite; privateKey: CryptoKey
   const userJson = (u: FakeUser) => ({
     id: u.id,
     email: u.email,
-    is_anonymous: false,
+    is_anonymous: u.anonymous === true,
     email_confirmed_at: u.confirmed ? new Date().toISOString() : null,
     user_metadata: u.metadata,
   })
@@ -43,7 +45,7 @@ export function createFakeSupabaseAuth(opts: { db: PGlite; privateKey: CryptoKey
   async function session(u: FakeUser) {
     const sessionId = randomUUID()
     const now = Math.floor(Date.now() / 1000)
-    const accessToken = await new SignJWT({ role: 'authenticated', email: u.email, is_anonymous: false, session_id: sessionId, user_metadata: u.metadata })
+    const accessToken = await new SignJWT({ role: 'authenticated', email: u.email, is_anonymous: u.anonymous === true, session_id: sessionId, user_metadata: u.metadata })
       .setProtectedHeader({ alg: 'ES256', kid: opts.kid, typ: 'JWT' })
       .setSubject(u.id)
       .setIssuer(`${opts.issuer()}/auth/v1`)
@@ -71,6 +73,12 @@ export function createFakeSupabaseAuth(opts: { db: PGlite; privateKey: CryptoKey
 
     switch (url.pathname) {
       case '/auth/v1/signup': {
+        if (body.email === undefined && body.password === undefined) {
+          const user: FakeUser = { id: randomUUID(), email: '', password: '', confirmed: false, metadata: {}, anonymous: true }
+          users.set(`anon:${user.id}`, user)
+          await opts.db.query('INSERT INTO auth.users (id) VALUES ($1)', [user.id])
+          return send(res, 200, await session(user))
+        }
         const email = String(body.email ?? '').toLowerCase()
         const password = String(body.password ?? '')
         if (password === 'password123') return error(res, 422, 'weak_password', 'Password is known to be weak and easy to guess', { weak_password: { reasons: ['pwned'] } })

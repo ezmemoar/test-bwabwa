@@ -51,8 +51,9 @@ and no Vue renderer. The database is Supabase Postgres.
   Support", "admin", "the.mods", look-alike spellings) are reserved for moderators and admins. There is a
   moderator queue with dismiss, remove and restore; users can hide ("block") other users; moderators and
   admins can ban, and only admins can ban or unban a moderator. This covers Google Play's UGC requirements.
-- **Supabase side**: turn on CAPTCHA (hCaptcha/Turnstile) for anonymous sign-ins, and keep Supabase's
-  per-IP sign-up limit. Account creation is the one abuse vector this API can't limit itself.
+- **Account creation**: every sign-up, anonymous ones included, goes through this API, which limits it per
+  client IP (`authAnonymousIp`, `authRegisterIp`). Supabase's own per-IP limits only see this server's
+  address (see Setup, step 3).
 - **Account deletion** (`DELETE /api/v1/me`) removes the Supabase auth user, which cascades to every row, as
   Google Play requires.
 
@@ -64,6 +65,7 @@ All `/api/v1/*` routes need `Authorization: Bearer <Supabase access token>`, exc
 | Method | Path | Notes |
 | --- | --- | --- |
 | GET | `/api/health`, `/api/health/ready` | Liveness, and readiness (DB ping) |
+| POST | `/api/v1/auth/anonymous` | No body → `{ user, session }` for a new anonymous account (what every install does first) |
 | POST | `/api/v1/auth/register` | `{ email, password, username? }` → session, or `confirmationRequired` if the project confirms emails |
 | POST | `/api/v1/auth/login` | `{ email, password }` → `{ user, session: { accessToken, refreshToken, expiresAt } }` |
 | POST | `/api/v1/auth/google` | `{ idToken, nonce }` from Android Credential Manager → session (account created on first use) |
@@ -96,13 +98,14 @@ pnpm dev                           # http://localhost:3000, docs at /api/docs
 Supabase dashboard:
 
 1. **Authentication → Sign In / Providers → Allow anonymous sign-ins: on.** The app signs every install in
-   anonymously. Keep CAPTCHA or the default anonymous sign-in rate limit on.
+   anonymously through `POST /api/v1/auth/anonymous`. Leave CAPTCHA protection off: the server can't solve one.
 2. **Email provider on** for register/login, and put the publishable key in `NUXT_SUPABASE_ANON_KEY`. With
    *Confirm email* on (the default), `register` returns `confirmationRequired: true` and the person signs in
    after clicking the link. Supabase's built-in mailer only delivers to your team's addresses and a few emails
    an hour; set up custom SMTP (Authentication → Emails) before real users sign up.
-3. **Authentication → Rate Limits**: every register/login/refresh reaches Supabase from this server's IP, so
-   Supabase's per-IP limits count all users together. Raise them to fit your traffic; this API enforces its
+3. **Authentication → Rate Limits**: every anonymous sign-up, register, login and refresh reaches Supabase from
+   this server's IP, so Supabase's per-IP limits count all users together. The anonymous sign-in limit (default
+   30 an hour) matters most: every new install uses one. Raise them to fit your traffic; this API enforces its
    own per-client-IP and per-email limits in front (`server/utils/rate-limit.ts`).
 4. Use JWT signing keys (the default for new projects). Only set `NUXT_SUPABASE_JWT_SECRET` on a legacy project.
 5. Give yourself admin rights after your first request has created your profile:
@@ -110,7 +113,8 @@ Supabase dashboard:
 
 ### Sign-in flows
 
-- **Anonymous (every install)**: the app gets an anonymous Supabase session and uses the API with it.
+- **Anonymous (every install)**: `POST /api/v1/auth/anonymous` creates an anonymous Supabase account and
+  returns its session; the app uses the API with it. The app never talks to Supabase directly.
 - **Register / login with email** (`/api/v1/auth/*`): the backend calls Supabase Auth (GoTrue) and returns the
   session. If the request also carries the device's **anonymous** access token as `Authorization: Bearer`, that
   anonymous account's posts, comments, reports, blocks, username and journey backup are moved into the email
@@ -161,21 +165,19 @@ given `--force`. `pnpm db:reset` drops the database, re-applies the migrations a
 
 ### Connecting the Android app
 
-Add the following to `app/local.properties` (it's gitignored), then rebuild:
+Optional settings for `app/local.properties` (it's gitignored); rebuild after changing them:
 
 ```properties
-climbly.supabaseUrl=https://<project-ref>.supabase.co
-climbly.supabaseAnonKey=<publishable / anon key>
-# Debug builds default to http://10.0.2.2:3000/ (this server's `pnpm dev`, seen from the emulator).
-# climbly.apiBaseUrl=http://192.168.1.20:3000/
-climbly.apiBaseUrl.release=https://api.example.com/
+# Both builds default to the deployed API, https://climblyt.vercel.app/. For this server's `pnpm dev`:
+# climbly.apiBaseUrl=http://10.0.2.2:3000/    (the host machine, seen from the emulator)
+# climbly.apiBaseUrl.release=https://api.example.com/
 # Sign in with Google: the Web OAuth client ID (see below). Empty hides the option.
 climbly.googleWebClientId=<id>.apps.googleusercontent.com
 ```
 
-The app signs itself in anonymously against Supabase Auth on the first online action (opening the forum,
-posting, or turning on backup). It then calls this API with the access token. Without these keys the app
-still runs, fully offline.
+The app needs no Supabase keys: it signs itself in anonymously through `POST /api/v1/auth/anonymous` on the
+first online action (opening the forum, posting, or turning on backup), then calls this API with the access
+token and refreshes it with `/api/v1/auth/refresh`.
 
 ### Sign in with Google (Profile → Account)
 
