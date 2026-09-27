@@ -19,24 +19,12 @@ export default defineNuxtConfig({
   runtimeConfig: {
     supabase: {
       /** NUXT_SUPABASE_DATABASE_URL: what the running API uses (transaction pooler, port 6543, is fine). */
-      databaseUrl: '',
+      databaseUrl: 'postgresql://postgres.azcvdphggrbnblfvkhtv:E7jL8LweHXyS60y3@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true',
       /** NUXT_SUPABASE_DIRECT_URL: session pooler (5432) or direct connection; used by Prisma migrations. */
-      directUrl: '',
+      directUrl: 'postgresql://postgres.azcvdphggrbnblfvkhtv:E7jL8LweHXyS60y3@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres',
       /** NUXT_SUPABASE_DATABASE_POOL_MAX */
       databasePoolMax: 10,
-      /** NUXT_SUPABASE_DATABASE_CA: Supabase's CA certificate (PEM) to verify the database's TLS certificate. */
-      databaseCa: '',
-      /** NUXT_SUPABASE_URL: https://<ref>.supabase.co. Optional: derived from the database URL when empty. */
-      url: '',
-      /** NUXT_SUPABASE_ANON_KEY: publishable (anon) key. Needed for login/register (Supabase Auth). */
-      anonKey: '',
-      /** NUXT_SUPABASE_SECRET_KEY: secret / service-role key, only for admin calls (account deletion). */
-      secretKey: '',
-      /** NUXT_SUPABASE_JWT_SECRET: legacy HS256 secret. Leave empty on projects using JWT signing keys. */
-      jwtSecret: '',
     },
-    /** Optional. When set, rate limits are shared across instances through Redis. */
-    redisUrl: '',
     /** How many reverse proxies you run in front of the server (true = 1). 0/false: use the socket address. */
     trustProxy: false,
     /** Comma-separated list of browser origins allowed by CORS. Native apps don't need CORS. */
