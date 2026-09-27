@@ -10,8 +10,8 @@
  * way on a real project); otherwise, or with SEED_AUTH=direct, rows go straight into auth.users, which is
  * what a local stub or the test database has.
  */
-import 'dotenv/config'
 import { PrismaPg } from '@prisma/adapter-pg'
+import { loadEnv } from '../env'
 import { PrismaClient } from '../server/generated/prisma/client'
 import { databaseConnection, supabaseUrlFromDatabaseUrl } from '../server/utils/database-connection'
 import {
@@ -31,6 +31,8 @@ import {
   VICTORY_EMOTIONS,
   type SeedJourney,
 } from './seed/data'
+
+loadEnv()
 
 const DAY = 86_400_000
 

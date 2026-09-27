@@ -1,6 +1,8 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 //
 // API-only Nuxt: no pages, no Vue server renderer. Everything lives in `server/` and is served by Nitro.
+import { env } from './env'
+
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: false },
@@ -13,27 +15,39 @@ export default defineNuxtConfig({
     noVueServer: true,
   },
 
-  // Every value can be overridden at runtime with NUXT_<SCREAMING_SNAKE_CASE> of its path
-  // (supabase.databaseUrl -> NUXT_SUPABASE_DATABASE_URL). server/utils/config.ts validates the merged result
-  // once at boot and fails fast on bad input.
+  // Defaults come from env.ts and are baked into the build. Every value can still be overridden at runtime with
+  // NUXT_<SCREAMING_SNAKE_CASE> of its path (supabase.databaseUrl -> NUXT_SUPABASE_DATABASE_URL).
+  // server/utils/config.ts validates the merged result once at boot and fails fast on bad input.
   runtimeConfig: {
     supabase: {
       /** NUXT_SUPABASE_DATABASE_URL: what the running API uses (transaction pooler, port 6543, is fine). */
-      databaseUrl: 'postgresql://postgres.azcvdphggrbnblfvkhtv:E7jL8LweHXyS60y3@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true',
+      databaseUrl: env.NUXT_SUPABASE_DATABASE_URL,
       /** NUXT_SUPABASE_DIRECT_URL: session pooler (5432) or direct connection; used by Prisma migrations. */
-      directUrl: 'postgresql://postgres.azcvdphggrbnblfvkhtv:E7jL8LweHXyS60y3@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres',
+      directUrl: env.NUXT_SUPABASE_DIRECT_URL,
       /** NUXT_SUPABASE_DATABASE_POOL_MAX */
-      databasePoolMax: 10,
+      databasePoolMax: env.NUXT_SUPABASE_DATABASE_POOL_MAX,
+      /** NUXT_SUPABASE_DATABASE_CA: Supabase's CA certificate (PEM) to verify the database's TLS certificate. */
+      databaseCa: env.NUXT_SUPABASE_DATABASE_CA,
+      /** NUXT_SUPABASE_URL: https://<ref>.supabase.co. Optional: derived from the database URL when empty. */
+      url: env.NUXT_SUPABASE_URL,
+      /** NUXT_SUPABASE_ANON_KEY: publishable (anon) key. Needed for login/register (Supabase Auth). */
+      anonKey: env.NUXT_SUPABASE_ANON_KEY,
+      /** NUXT_SUPABASE_SECRET_KEY: secret / service-role key, only for admin calls (account deletion). */
+      secretKey: env.NUXT_SUPABASE_SECRET_KEY,
+      /** NUXT_SUPABASE_JWT_SECRET: legacy HS256 secret. Leave empty on projects using JWT signing keys. */
+      jwtSecret: env.NUXT_SUPABASE_JWT_SECRET,
     },
+    /** Optional. When set, rate limits are shared across instances through Redis. */
+    redisUrl: env.NUXT_REDIS_URL,
     /** How many reverse proxies you run in front of the server (true = 1). 0/false: use the socket address. */
-    trustProxy: false,
+    trustProxy: env.NUXT_TRUST_PROXY,
     /** Comma-separated list of browser origins allowed by CORS. Native apps don't need CORS. */
-    corsOrigins: '',
+    corsOrigins: env.NUXT_CORS_ORIGINS,
     /** A post or comment is hidden automatically once this many distinct people report it. */
-    autoHideReportThreshold: 3,
+    autoHideReportThreshold: env.NUXT_AUTO_HIDE_REPORT_THRESHOLD,
     /** Reports only count toward auto-hiding once the reporting account is this old (anti-brigading). */
-    reportMinAccountAgeHours: 24,
-    logLevel: 'info',
+    reportMinAccountAgeHours: env.NUXT_REPORT_MIN_ACCOUNT_AGE_HOURS,
+    logLevel: env.NUXT_LOG_LEVEL,
   },
 
   nitro: {

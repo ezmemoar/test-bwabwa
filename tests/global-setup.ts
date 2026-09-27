@@ -104,8 +104,9 @@ export default async function setup(project: TestProject) {
   await pgServer.start()
   const databaseUrl = `postgres://postgres:postgres@127.0.0.1:${pgPort}/postgres`
 
-  // Every database/Supabase variable is set explicitly. The tooling also reads backend/.env (dotenv never
-  // overrides what's already set), and that file points at a real Supabase project the tests must not touch.
+  // Every database/Supabase variable is set explicitly. The tooling and the built server also fall back to
+  // backend/env.ts (never over what's already set), and that file points at a real Supabase project the tests
+  // must not touch.
   const isolatedEnv = {
     MIGRATION_DATABASE_URL: databaseUrl,
     NUXT_SUPABASE_DATABASE_URL: databaseUrl,

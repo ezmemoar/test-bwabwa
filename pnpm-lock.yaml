@@ -153,9 +153,6 @@ importers:
       '@types/node':
         specifier: ^24.19.0
         version: 24.19.0
-      dotenv:
-        specifier: ^17.0.0
-        version: 17.4.2
       prisma:
         specifier: 7.10.0
         version: 7.10.0(@types/node@24.19.0)(@types/react@19.3.0)(magicast@0.5.5)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@5.9.3)

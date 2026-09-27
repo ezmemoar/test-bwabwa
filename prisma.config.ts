@@ -1,5 +1,7 @@
-import 'dotenv/config'
 import { defineConfig } from 'prisma/config'
+import { loadEnv } from './env'
+
+loadEnv()
 
 // Migrations need a session-capable connection: Supabase's direct connection or the session pooler (port
 // 5432), not the transaction pooler (6543) that the running API uses.
